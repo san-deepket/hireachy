@@ -88,8 +88,6 @@ dialog,.io{border:1.5px solid var(--ink);border-radius:8px;padding:12px;backgrou
 
 <div class="bar">
   <button class="primary" id="addRoot">+ Add top-level box</button>
-  <button id="docBtn">Download Word (.docx)</button>
-  <button id="copyBtn">Copy report for Word</button>
   <button id="resetBtn">Reset example</button>
   <span class="hint" id="saveHint"></span>
 </div>
@@ -101,6 +99,11 @@ dialog,.io{border:1.5px solid var(--ink);border-radius:8px;padding:12px;backgrou
     <div class="rptWrap">
       <label class="rptLabel" for="rptTitle">Report title</label>
       <input id="rptTitle" value="Faculty Hierarchy Report">
+      <div class="row">
+        <button class="primary" id="docBtn">Download Word (.docx)</button>
+        <button id="copyBtn">Copy for Word</button>
+      </div>
+      <span class="hint" id="rptHint"></span>
       <div class="reportBox" id="report"></div>
     </div>
   </div>
@@ -132,7 +135,7 @@ function load(){
 }
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify(nodes));$('saveHint').textContent='Saved in this browser';}
-  catch(e){$('saveHint').textContent='Not saved. Use Export JSON to keep your work.';}
+  catch(e){$('saveHint').textContent='Not saved in this browser. Download the Word report to keep your work.';}
 }
 function byId(id){return nodes.find(function(n){return n.id===id})}
 function kids(id){return nodes.filter(function(n){return n.parent===id})}
@@ -292,7 +295,7 @@ $('copyBtn').addEventListener('click',function(){
   var r=document.createRange();r.selectNodeContents($('report'));
   var sl=window.getSelection();sl.removeAllRanges();sl.addRange(r);
   var ok=false;try{ok=document.execCommand('copy')}catch(e){}
-  $('saveHint').textContent=ok?'Copied. Paste it into a blank Word page.':'Report selected. Press Ctrl+C, then paste into Word.';
+  $('rptHint').textContent=ok?'Copied. Paste it into a blank Word page.':'Report selected. Press Ctrl+C, then paste into Word.';
 });
 function wx(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function wRun(t,o){o=o||{};return '<w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>'+(o.b?'<w:b/>':'')+'<w:color w:val="'+(o.c||'16193A')+'"/><w:sz w:val="'+(o.sz||22)+'"/></w:rPr><w:t xml:space="preserve">'+wx(t)+'</w:t></w:r>'}
@@ -329,7 +332,7 @@ async function buildDocx(){
   return z.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
 }
 $('docBtn').addEventListener('click',async function(){
-  var h=$('saveHint');
+  var h=$('rptHint');
   try{
     var dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
     if(!dl){h.textContent='Download is not available here. Use "Copy report for Word" and paste into Word.';return}

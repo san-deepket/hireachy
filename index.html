@@ -335,12 +335,16 @@ $('docBtn').addEventListener('click',async function(){
   var h=$('rptHint');
   try{
     var dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
-    if(!dl){h.textContent='Download is not available here. Use "Copy report for Word" and paste into Word.';return}
     var blob=await buildDocx();
+    if(!dl){
+      var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Faculty-Hierarchy-Report.docx';
+      document.body.appendChild(a);a.click();a.remove();
+      h.textContent='Download started. If no file appeared, use "Copy for Word" and paste into Word.';return;
+    }
     await dl.save({filename:'Faculty-Hierarchy-Report.docx',data:blob});
     h.textContent='Word report saved.';
   }catch(e){
-    h.textContent=(e&&e.code==='declined')?'Download cancelled.':'Could not create the file. Use "Copy report for Word" instead.';
+    h.textContent=(e&&e.code==='declined')?'Download cancelled.':'Could not create the file. Use "Copy for Word" instead.';
   }
 });
 var armReset=false;

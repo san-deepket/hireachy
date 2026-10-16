@@ -2,6 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 /* Layout: notebook-grid canvas with a drag-and-drop org tree on the left, an edit panel on the right (stacked on phones). */
 :root{
@@ -75,6 +76,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .toast{font-family:var(--font-mono);font-size:12px;color:var(--ok);min-height:16px}
 dialog,.io{border:1.5px solid var(--ink);border-radius:8px;padding:12px;background:var(--card);margin-top:14px}
 .io textarea{width:100%;min-height:140px;background:var(--paper);border:1.5px solid var(--grid);border-radius:6px;padding:8px;font-family:var(--font-mono);font-size:12px}
+.rptWrap{margin-top:16px;display:flex;flex-direction:column;gap:6px}
+.rptLabel{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#rptTitle{background:var(--card);border:1.5px solid var(--grid);border-radius:6px;padding:8px}
+.reportBox{background:#fff;color:#16193a;border:1.5px solid var(--ink);border-radius:8px;padding:18px;overflow-x:auto}
 @media (prefers-reduced-motion:no-preference){.node{transition:box-shadow .12s,background .12s}}
 </style>
 
@@ -83,8 +88,8 @@ dialog,.io{border:1.5px solid var(--ink);border-radius:8px;padding:12px;backgrou
 
 <div class="bar">
   <button class="primary" id="addRoot">+ Add top-level box</button>
-  <button id="exportBtn">Export JSON</button>
-  <button id="importBtn">Import JSON</button>
+  <button id="docBtn">Download Word (.docx)</button>
+  <button id="copyBtn">Copy report for Word</button>
   <button id="resetBtn">Reset example</button>
   <span class="hint" id="saveHint"></span>
 </div>
@@ -93,14 +98,10 @@ dialog,.io{border:1.5px solid var(--ink);border-radius:8px;padding:12px;backgrou
   <div>
     <div class="canvas" id="canvas"><div class="roots" id="roots"></div></div>
     <div class="dropRoot" id="dropRoot">Drop here to make a box top-level</div>
-    <div class="io" id="io" hidden>
-      <p class="hint" id="ioHint"></p>
-      <textarea id="ioText" spellcheck="false"></textarea>
-      <div class="row" style="margin-top:8px">
-        <button class="primary" id="ioApply">Load this JSON</button>
-        <button id="ioCopy">Copy</button>
-        <button id="ioClose">Close</button>
-      </div>
+    <div class="rptWrap">
+      <label class="rptLabel" for="rptTitle">Report title</label>
+      <input id="rptTitle" value="Faculty Hierarchy Report">
+      <div class="reportBox" id="report"></div>
     </div>
   </div>
 
@@ -183,6 +184,7 @@ function render(){
     var ul=document.createElement('ul');ul.className='tree';ul.appendChild(buildNode(r));roots.appendChild(ul);
   });
   renderPanel();
+  renderReport();
 }
 
 function opt(parent,id,label){var o=document.createElement('option');o.value=id;o.textContent=label;parent.appendChild(o);return o}
@@ -247,6 +249,7 @@ function shift(n,dir){
   var tmp=nodes[a];nodes[a]=nodes[b];nodes[b]=tmp;save();render();
 }
 function refreshTreeOnly(){
+  renderReport();
   var roots=$('roots');roots.textContent='';
   nodes.filter(function(n){return !n.parent}).forEach(function(r){
     var ul=document.createElement('ul');ul.className='tree';ul.appendChild(buildNode(r));roots.appendChild(ul);
@@ -259,26 +262,83 @@ dr.addEventListener('dragover',function(e){if(dragId){e.preventDefault();dr.clas
 dr.addEventListener('dragleave',function(){dr.classList.remove('over')});
 dr.addEventListener('drop',function(e){e.preventDefault();dr.classList.remove('over');if(dragId)move(dragId,null)});
 
-function openIO(mode){
-  $('io').hidden=false;
-  if(mode==='export'){$('ioHint').textContent='Copy this text and keep it. Paste it back with Import JSON to restore.';$('ioText').value=JSON.stringify(nodes,null,2)}
-  else{$('ioHint').textContent='Paste exported JSON here, then press Load.';$('ioText').value=''}
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function reportHTML(){
+  var title=$('rptTitle').value||'Faculty Hierarchy Report';
+  var date=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+  var cell='border:1px solid #1d2a8a;padding:6px 8px;vertical-align:top;font-size:11pt;';
+  var head='border:1px solid #1d2a8a;padding:6px 8px;background:#1d2a8a;color:#ffffff;text-align:left;font-size:11pt;';
+  var rows='',people=0;
+  (function walk(pid,depth){
+    nodes.filter(function(x){return (x.parent||null)===pid}).forEach(function(x){
+      var par=x.parent?byId(x.parent).role:'Top level';
+      people+=x.names.length;
+      rows+='<tr><td style="'+cell+'text-align:center;">'+(depth+1)+'</td>'+
+        '<td style="'+cell+'padding-left:'+(8+depth*18)+'px;font-weight:bold;">'+(depth?'\u21B3 ':'')+esc(x.role||'Untitled')+'</td>'+
+        '<td style="'+cell+'">'+(x.names.length?x.names.map(esc).join(', '):'-')+'</td>'+
+        '<td style="'+cell+'">'+esc(par)+'</td></tr>';
+      walk(x.id,depth+1);
+    });
+  })(null,0);
+  return '<div style="font-family:Calibri,Arial,sans-serif;color:#16193a;">'+
+    '<h1 style="font-size:20pt;color:#1d2a8a;margin:0 0 4px;">'+esc(title)+'</h1>'+
+    '<p style="color:#555555;margin:0 0 12px;font-size:10pt;">Prepared on '+date+' | '+nodes.length+' positions | '+people+' faculty names listed</p>'+
+    '<table style="border-collapse:collapse;width:100%;"><thead><tr>'+
+    '<th style="'+head+'width:50px;">Level</th><th style="'+head+'">Role / Department</th><th style="'+head+'">Assigned faculty</th><th style="'+head+'">Reports to</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
-$('exportBtn').addEventListener('click',function(){openIO('export')});
-$('importBtn').addEventListener('click',function(){openIO('import')});
-$('ioClose').addEventListener('click',function(){$('io').hidden=true});
-$('ioCopy').addEventListener('click',function(){
-  var t=$('ioText');
-  var fb=function(){t.focus();t.select();$('ioHint').textContent='Press Ctrl+C (or long-press Copy) to copy the selected text.'};
-  try{navigator.clipboard.writeText(t.value).then(function(){$('ioHint').textContent='Copied.'},fb)}catch(e){fb()}
+function renderReport(){$('report').innerHTML=reportHTML()}
+$('rptTitle').addEventListener('input',renderReport);
+$('copyBtn').addEventListener('click',function(){
+  var r=document.createRange();r.selectNodeContents($('report'));
+  var sl=window.getSelection();sl.removeAllRanges();sl.addRange(r);
+  var ok=false;try{ok=document.execCommand('copy')}catch(e){}
+  $('saveHint').textContent=ok?'Copied. Paste it into a blank Word page.':'Report selected. Press Ctrl+C, then paste into Word.';
 });
-$('ioApply').addEventListener('click',function(){
+function wx(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function wRun(t,o){o=o||{};return '<w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>'+(o.b?'<w:b/>':'')+'<w:color w:val="'+(o.c||'16193A')+'"/><w:sz w:val="'+(o.sz||22)+'"/></w:rPr><w:t xml:space="preserve">'+wx(t)+'</w:t></w:r>'}
+function wPara(t,o){o=o||{};return '<w:p><w:pPr><w:spacing w:before="0" w:after="'+(o.after||0)+'"/>'+(o.ind?'<w:ind w:left="'+o.ind+'"/>':'')+(o.jc?'<w:jc w:val="'+o.jc+'"/>':'')+'</w:pPr>'+wRun(t,o)+'</w:p>'}
+function wCell(w,t,o){o=o||{};return '<w:tc><w:tcPr><w:tcW w:w="'+w+'" w:type="dxa"/>'+(o.fill?'<w:shd w:val="clear" w:color="auto" w:fill="'+o.fill+'"/>':'')+'</w:tcPr>'+wPara(t,o)+'</w:tc>'}
+function buildDocXml(){
+  var title=$('rptTitle').value||'Faculty Hierarchy Report';
+  var date=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+  var W=[800,3000,3238,2600],people=0,rows='';
+  (function walk(pid,depth){
+    nodes.filter(function(x){return (x.parent||null)===pid}).forEach(function(x){
+      people+=x.names.length;
+      var par=x.parent?byId(x.parent).role:'Top level';
+      rows+='<w:tr>'+wCell(W[0],String(depth+1),{jc:'center'})+
+        wCell(W[1],(depth?'↳ ':'')+(x.role||'Untitled'),{b:1,ind:depth*270})+
+        wCell(W[2],x.names.length?x.names.join(', '):'-')+wCell(W[3],par)+'</w:tr>';
+      walk(x.id,depth+1);
+    });
+  })(null,0);
+  var hdr='<w:tr><w:trPr><w:tblHeader/></w:trPr>'+['Level','Role / Department','Assigned faculty','Reports to'].map(function(h,i){return wCell(W[i],h,{b:1,c:'FFFFFF',fill:'1D2A8A'})}).join('')+'</w:tr>';
+  var bd=['top','left','bottom','right','insideH','insideV'].map(function(k){return '<w:'+k+' w:val="single" w:sz="4" w:space="0" w:color="1D2A8A"/>'}).join('');
+  var tbl='<w:tbl><w:tblPr><w:tblW w:w="9638" w:type="dxa"/><w:tblBorders>'+bd+'</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'+W.map(function(w){return '<w:gridCol w:w="'+w+'"/>'}).join('')+'</w:tblGrid>'+hdr+rows+'</w:tbl>';
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+
+    wPara(title,{b:1,sz:40,c:'1D2A8A',after:80})+
+    wPara('Prepared on '+date+' | '+nodes.length+' positions | '+people+' faculty names listed',{sz:20,c:'555555',after:240})+
+    tbl+wPara('',{})+
+    '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>';
+}
+async function buildDocx(){
+  var z=new JSZip();
+  z.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  z.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  z.file('word/document.xml',buildDocXml());
+  return z.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+}
+$('docBtn').addEventListener('click',async function(){
+  var h=$('saveHint');
   try{
-    var d=JSON.parse($('ioText').value);
-    if(!Array.isArray(d)||!d.every(function(x){return x&&typeof x.id==='string'&&typeof x.role==='string'&&Array.isArray(x.names)}))throw new Error('bad');
-    nodes=d.map(function(x){return {id:x.id,role:x.role,names:x.names.map(String),parent:x.parent||null}});
-    sel=null;save();render();$('io').hidden=true;
-  }catch(e){$('ioHint').textContent='That text is not a valid hierarchy. Check that you pasted the full export.'}
+    var dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
+    if(!dl){h.textContent='Download is not available here. Use "Copy report for Word" and paste into Word.';return}
+    var blob=await buildDocx();
+    await dl.save({filename:'Faculty-Hierarchy-Report.docx',data:blob});
+    h.textContent='Word report saved.';
+  }catch(e){
+    h.textContent=(e&&e.code==='declined')?'Download cancelled.':'Could not create the file. Use "Copy report for Word" instead.';
+  }
 });
 var armReset=false;
 $('resetBtn').addEventListener('click',function(){

@@ -42,19 +42,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
   background-size:24px 24px}
 .roots{display:flex;gap:40px;min-width:max-content;justify-content:center}
-.tree,.tree ul{margin:0;padding:0;display:flex;justify-content:center;position:relative;padding-top:22px}
-.tree{padding-top:0}
-.tree li{list-style:none;position:relative;padding:22px 8px 0;text-align:center}
-.tree li::before,.tree li::after{content:'';position:absolute;top:0;right:50%;width:50%;height:22px;border-top:2px solid var(--line)}
-.tree li::after{right:auto;left:50%;border-left:2px solid var(--line)}
-.tree li:only-child::before,.tree li:only-child::after{display:none}
-.tree li:only-child{padding-top:22px}
-.tree li:first-child::before,.tree li:last-child::after{border:0 none}
-.tree li:last-child::before{border-right:2px solid var(--line);border-radius:0 6px 0 0}
-.tree li:first-child::after{border-radius:6px 0 0 0}
-.tree ul::before{content:'';position:absolute;top:0;left:50%;border-left:2px solid var(--line);height:22px}
-.tree>li{padding-top:0}
-.tree>li::before,.tree>li::after{display:none}
+.tree,.tree ul{margin:0;padding:0;display:flex;justify-content:center;align-items:flex-start;position:relative}
+.tree ul{padding-top:44px}
+.tree li{list-style:none;position:relative;padding:0 8px;text-align:center}
 .node{display:inline-block;width:168px;text-align:left;background:var(--card);border:1.5px solid var(--ink);border-radius:8px;padding:9px 11px;cursor:grab;position:relative}
 .node.sel{background:var(--sel);box-shadow:0 0 0 3px var(--ink-soft)}
 .node.over{outline:3px dashed var(--ok);outline-offset:3px}
@@ -104,6 +94,10 @@ dialog,.io{border:1.5px solid var(--ink);border-radius:8px;padding:12px;backgrou
   <div>
     <div class="canvas" id="canvas"><div class="stage" id="stage"><svg class="dots" id="dots" aria-hidden="true"></svg><div class="roots" id="roots"></div></div></div>
     <div class="hint" id="drawHint" style="margin-top:8px"></div>
+    <div class="row" style="margin-top:8px;align-items:center">
+      <button class="primary" id="imgBtn">Download diagram (PNG)</button>
+      <span class="hint" id="imgHint"></span>
+    </div>
     <div class="dropRoot" id="dropRoot">Drop here to make a box top-level</div>
     <div class="rptWrap">
       <label class="rptLabel" for="rptTitle">Report title</label>
@@ -126,11 +120,10 @@ var KEY='faculty-hierarchy-v1';
 var SEED=[
  {id:'dean',role:'Dean',names:['AB'],parent:null},
  {id:'head',role:'Head / HOD',names:[],parent:'dean'},
- {id:'assoc',role:'Associate Head',names:[],parent:'head'},
- {id:'sr',role:'SR',names:[],parent:'head'},
- {id:'training',role:'Training',names:[],parent:'head'},
- {id:'aiml',role:'AIML',names:['Ruby','Hmd'],parent:'sr',dotted:['head']},
- {id:'cse',role:'CSE',names:['NG'],parent:'sr'},
+ {id:'assoc',role:'Associate Head (CSE)',names:['NG'],parent:'head'},
+ {id:'hons',role:'HONs',names:[],parent:'head',solid:false,dotted:['head']},
+ {id:'aiml',role:'AIML',names:['Ruby','Hmd'],parent:'head',solid:false,dotted:['head']},
+ {id:'training',role:'Training',names:[],parent:'head',solid:false,dotted:['head']},
  {id:'cl1',role:'Cluster CL1',names:['JP'],parent:'assoc'},
  {id:'cl2',role:'Cluster CL2',names:[],parent:'assoc'},
  {id:'cl3',role:'Cluster CL3',names:['Mgr'],parent:'assoc'}
@@ -156,7 +149,7 @@ function move(id,newParent){
   if(id===newParent)return;
   if(newParent&&isDesc(newParent,id))return;
   var n=byId(id);if(!n)return;
-  n.parent=newParent||null;
+  n.parent=newParent||null;n.solid=true;
   nodes.splice(nodes.indexOf(n),1);nodes.push(n);
   save();render();
 }
@@ -228,7 +221,7 @@ function renderPanel(){
   ta.addEventListener('input',function(){n.names=ta.value.split('\n').map(function(s){return s.trim()}).filter(Boolean);save();refreshTreeOnly()});
   l2.appendChild(ta);p.appendChild(l2);
 
-  var l3=document.createElement('label');l3.textContent='Reports to';
+  var l3=document.createElement('label');l3.textContent='Placed under';
   var sp=document.createElement('select');sp.id='fParent';
   opt(sp,'','(Top level)');
   (function walk(pid,depth){
@@ -241,10 +234,18 @@ function renderPanel(){
   sp.value=n.parent||'';
   sp.addEventListener('change',function(){move(n.id,sp.value||null)});
   l3.appendChild(sp);p.appendChild(l3);
+  if(n.parent){
+    var lc=document.createElement('label');
+    lc.style.cssText='flex-direction:row;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-family:var(--font-body);font-size:14px;color:var(--text)';
+    var cb=document.createElement('input');cb.type='checkbox';cb.id='fSolid';cb.checked=n.solid!==false;
+    cb.addEventListener('change',function(){n.solid=cb.checked;save();render()});
+    lc.appendChild(cb);lc.appendChild(document.createTextNode('Draw a solid line to the box above'));
+    p.appendChild(lc);
+  }
 
   var dl=document.createElement('label');dl.textContent='Dotted line to';
   var dsel=document.createElement('select');dsel.id='fDot';opt(dsel,'','Choose a box...');
-  nodes.forEach(function(x){if(x.id!==n.id&&x.id!==n.parent&&(n.dotted||[]).indexOf(x.id)<0)opt(dsel,x.id,x.role||'Untitled')});
+  nodes.forEach(function(x){if(x.id!==n.id&&!(x.id===n.parent&&n.solid!==false)&&(n.dotted||[]).indexOf(x.id)<0)opt(dsel,x.id,x.role||'Untitled')});
   dsel.addEventListener('change',function(){if(dsel.value)addDot(n.id,dsel.value)});
   dl.appendChild(dsel);p.appendChild(dl);
   (n.dotted||[]).forEach(function(tid){
@@ -274,7 +275,7 @@ function renderPanel(){
   p.appendChild(r2);
 }
 function addDot(from,to){
-  var n=byId(from);if(!n||from===to||n.parent===to)return;
+  var n=byId(from);if(!n||from===to||(n.parent===to&&n.solid!==false))return;
   n.dotted=n.dotted||[];
   if(n.dotted.indexOf(to)<0)n.dotted.push(to);
   save();
@@ -294,17 +295,31 @@ function drawDots(){
   function box(id){
     var el=document.querySelector('.node[data-id="'+id+'"]');if(!el)return null;
     var r=el.getBoundingClientRect();
-    return {l:r.left-sr.left,r:r.right-sr.left,cx:(r.left+r.right)/2-sr.left,cy:(r.top+r.bottom)/2-sr.top};
+    return {l:r.left-sr.left,r:r.right-sr.left,t:r.top-sr.top,b:r.bottom-sr.top,cx:(r.left+r.right)/2-sr.left,cy:(r.top+r.bottom)/2-sr.top};
   }
+  nodes.forEach(function(n){
+    if(!n.parent||n.solid===false)return;
+    var a=box(n.parent),c=box(n.id);if(!a||!c)return;
+    var my=(a.b+c.t)/2,p=document.createElementNS(NS,'path');
+    p.setAttribute('d','M'+a.cx+' '+a.b+' V'+my+' H'+c.cx+' V'+c.t);
+    p.setAttribute('fill','none');p.setAttribute('stroke-width','2');p.setAttribute('stroke-linejoin','round');
+    p.style.stroke='var(--line)';
+    svg.appendChild(p);
+  });
   nodes.forEach(function(n){(n.dotted||[]).forEach(function(tid){
     var a=box(n.id),b=box(tid);if(!a||!b)return;
-    var dx=b.cx-a.cx,x1,y1=a.cy,x2,y2=b.cy,c1,c2;
-    if(Math.abs(dx)>150){
-      var sg=dx>0?1:-1;x1=dx>0?a.r:a.l;x2=dx>0?b.l:b.r;
+    var dx=b.cx-a.cx,x1,y1,x2,y2,c1,c2;
+    if(b.b<a.t-10){
+      x1=a.cx;y1=a.t;
+      x2=Math.max(b.l+14,Math.min(b.r-14,b.cx+(a.cx-b.cx)*0.12));y2=b.b;
+      var kk=Math.max(30,(y1-y2)/2);
+      c1=[x1,y1-kk];c2=[x2,y2+kk];
+    }else if(Math.abs(dx)>150){
+      var sg=dx>0?1:-1;x1=dx>0?a.r:a.l;y1=a.cy;x2=dx>0?b.l:b.r;y2=b.cy;
       var k=Math.max(40,Math.abs(x2-x1)/2);
       c1=[x1+sg*k,y1];c2=[x2-sg*k,y2];
     }else{
-      x1=a.r;x2=b.r;c1=[x1+70,y1];c2=[x2+70,y2];
+      x1=a.r;y1=a.cy;x2=b.r;y2=b.cy;c1=[x1+70,y1];c2=[x2+70,y2];
     }
     var path=document.createElementNS(NS,'path');
     path.setAttribute('d','M'+x1+' '+y1+' C'+c1[0]+' '+c1[1]+' '+c2[0]+' '+c2[1]+' '+x2+' '+y2);
@@ -314,10 +329,10 @@ function drawDots(){
     var c=document.createElementNS(NS,'circle');
     c.setAttribute('cx',x2);c.setAttribute('cy',y2);c.setAttribute('r','4.5');c.style.fill='var(--dot)';
     svg.appendChild(c);
-    var mx=0.125*x1+0.375*c1[0]+0.375*c2[0]+0.125*x2,my=0.125*y1+0.375*c1[1]+0.375*c2[1]+0.125*y2;
+    var mx=0.125*x1+0.375*c1[0]+0.375*c2[0]+0.125*x2,my2=0.125*y1+0.375*c1[1]+0.375*c2[1]+0.125*y2;
     var tn=byId(tid),del=document.createElement('button');
-    del.type='button';del.className='dotx';del.textContent='\u00D7';
-    del.style.left=mx+'px';del.style.top=my+'px';
+    del.type='button';del.className='dotx';del.textContent='×';
+    del.style.left=mx+'px';del.style.top=my2+'px';
     var lbl='Delete dotted line from '+(n.role||'box')+' to '+(tn?tn.role:'box');
     del.title=lbl;del.setAttribute('aria-label',lbl);
     del.addEventListener('click',function(ev){ev.stopPropagation();n.dotted=(n.dotted||[]).filter(function(i){return i!==tid});save();render()});
@@ -360,7 +375,7 @@ function reportHTML(){
   var rows='',people=0;
   (function walk(pid,depth){
     nodes.filter(function(x){return (x.parent||null)===pid}).forEach(function(x){
-      var par=x.parent?byId(x.parent).role:'Top level';
+      var par=(x.parent&&x.solid!==false)?byId(x.parent).role:((x.dotted||[]).length?'None (dotted line only)':'Top level');
       var dots=(x.dotted||[]).map(function(i){var t=byId(i);return t?t.role:''}).filter(Boolean).join(', ')||'-';
       people+=x.names.length;
       rows+='<tr><td style="'+cell+'text-align:center;">'+(depth+1)+'</td>'+
@@ -384,6 +399,78 @@ $('copyBtn').addEventListener('click',function(){
   var ok=false;try{ok=document.execCommand('copy')}catch(e){}
   $('rptHint').textContent=ok?'Copied. Paste it into a blank Word page.':'Report selected. Press Ctrl+C, then paste into Word.';
 });
+function rrect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
+function wrapText(ctx,text,maxW){
+  var out=[],line='';
+  String(text).split(/\s+/).forEach(function(word){
+    var t=line?line+' '+word:word;
+    if(ctx.measureText(t).width<=maxW||!line){line=t}else{out.push(line);line=word}
+  });
+  if(line)out.push(line);return out.length?out:[''];
+}
+async function exportPng(){
+  var h=$('imgHint');
+  try{
+    try{await document.fonts.ready}catch(e){}
+    drawDots();
+    var st=$('stage'),svg=$('dots'),sr=st.getBoundingClientRect();
+    var els=[].slice.call(document.querySelectorAll('.node'));
+    var minX=1e9,maxX=0;
+    els.forEach(function(el){var r=el.getBoundingClientRect();minX=Math.min(minX,r.left-sr.left);maxX=Math.max(maxX,r.right-sr.left)});
+    var pad=24,head=70,left=Math.max(0,minX-30),right=Math.min(st.offsetWidth,maxX+90);
+    var W=Math.max(480,right-left)+pad*2,H=st.offsetHeight+head+pad,S=2;
+    var cv=document.createElement('canvas');cv.width=Math.round(W*S);cv.height=Math.round(H*S);
+    var ctx=cv.getContext('2d');ctx.scale(S,S);
+    ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);
+    var title=$('rptTitle').value||'Faculty Hierarchy';
+    var date=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+    ctx.fillStyle='#1d2a8a';ctx.font='700 22px "Schibsted Grotesk",Arial,sans-serif';ctx.fillText(title,pad,36);
+    ctx.fillStyle='#555555';ctx.font='12px "IBM Plex Mono",monospace';
+    ctx.fillText('Solid line: reports to  |  Dotted line: dotted-line reporting  |  '+date,pad,56);
+    ctx.save();ctx.translate(pad-left,head);
+    svg.querySelectorAll('path').forEach(function(pa){
+      var dashed=pa.getAttribute('stroke-dasharray');
+      ctx.strokeStyle=dashed?'#c2410c':'#1d2a8a';ctx.lineWidth=dashed?2.2:2;ctx.lineJoin='round';
+      ctx.setLineDash(dashed?[6,5]:[]);
+      ctx.stroke(new Path2D(pa.getAttribute('d')));
+    });
+    ctx.setLineDash([]);
+    svg.querySelectorAll('circle').forEach(function(c){
+      ctx.fillStyle='#c2410c';ctx.beginPath();ctx.arc(+c.getAttribute('cx'),+c.getAttribute('cy'),4.5,0,Math.PI*2);ctx.fill();
+    });
+    els.forEach(function(el){
+      var r=el.getBoundingClientRect(),x=r.left-sr.left,y=r.top-sr.top,w=r.width,hh=r.height,tw=w-22;
+      rrect(ctx,x,y,w,hh,8);ctx.fillStyle='#ffffff';ctx.fill();ctx.strokeStyle='#1d2a8a';ctx.lineWidth=1.5;ctx.stroke();
+      var ty=y+9;
+      ctx.font='500 11px "IBM Plex Mono",monospace';ctx.fillStyle='#1d2a8a';
+      wrapText(ctx,el.querySelector('.role').textContent.toUpperCase(),tw).forEach(function(l){ty+=14;ctx.fillText(l,x+11,ty-3)});
+      ty+=5;
+      el.querySelectorAll('.names span').forEach(function(sp){
+        var emp=sp.classList.contains('empty');
+        ctx.font=(emp?'italic ':'')+'14px "Schibsted Grotesk",Arial,sans-serif';ctx.fillStyle=emp?'#5d6385':'#16193a';
+        wrapText(ctx,sp.textContent,tw).forEach(function(l){ty+=19;ctx.fillText(l,x+11,ty-5)});
+      });
+      var cnt=el.querySelector('.count');
+      if(cnt){
+        ctx.font='11px "IBM Plex Mono",monospace';var bw=ctx.measureText(cnt.textContent).width+14;
+        rrect(ctx,x+w-8-bw,y-9,bw,18,9);ctx.fillStyle='#1d2a8a';ctx.fill();
+        ctx.fillStyle='#ffffff';ctx.fillText(cnt.textContent,x+w-8-bw+7,y+4);
+      }
+    });
+    ctx.restore();
+    var blob=await new Promise(function(res){cv.toBlob(res,'image/png')});
+    if(!blob)throw new Error('image');
+    var dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
+    if(dl){await dl.save({filename:'Faculty-Hierarchy-Diagram.png',data:blob});h.textContent='Diagram saved.';}
+    else{
+      var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Faculty-Hierarchy-Diagram.png';
+      document.body.appendChild(a);a.click();a.remove();h.textContent='Download started.';
+    }
+  }catch(e){
+    h.textContent=(e&&e.code==='declined')?'Download cancelled.':'Could not save the diagram ('+((e&&(e.code||e.message))||'unknown')+').';
+  }
+}
+$('imgBtn').addEventListener('click',exportPng);
 function wx(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function wRun(t,o){o=o||{};return '<w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>'+(o.b?'<w:b/>':'')+'<w:color w:val="'+(o.c||'16193A')+'"/><w:sz w:val="'+(o.sz||22)+'"/></w:rPr><w:t xml:space="preserve">'+wx(t)+'</w:t></w:r>'}
 function wPara(t,o){o=o||{};return '<w:p><w:pPr><w:spacing w:before="0" w:after="'+(o.after||0)+'"/>'+(o.ind?'<w:ind w:left="'+o.ind+'"/>':'')+(o.jc?'<w:jc w:val="'+o.jc+'"/>':'')+'</w:pPr>'+wRun(t,o)+'</w:p>'}
@@ -395,7 +482,7 @@ function buildDocXml(){
   (function walk(pid,depth){
     nodes.filter(function(x){return (x.parent||null)===pid}).forEach(function(x){
       people+=x.names.length;
-      var par=x.parent?byId(x.parent).role:'Top level';
+      var par=(x.parent&&x.solid!==false)?byId(x.parent).role:((x.dotted||[]).length?'None (dotted line only)':'Top level');
       var dots=(x.dotted||[]).map(function(i){var t=byId(i);return t?t.role:''}).filter(Boolean).join(', ')||'-';
       rows+='<w:tr>'+wCell(W[0],String(depth+1),{jc:'center'})+
         wCell(W[1],(depth?'↳ ':'')+(x.role||'Untitled'),{b:1,ind:depth*270})+

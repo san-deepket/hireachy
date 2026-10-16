@@ -81,6 +81,8 @@ dialog,.io{border:1.5px solid var(--ink);border-radius:8px;padding:12px;backgrou
 .node.src{outline:3px solid var(--dot);outline-offset:3px}
 .dotrow{align-items:center;justify-content:space-between;border:1.5px dashed var(--dot);border-radius:6px;padding:4px 8px}
 .dotrow button{padding:3px 8px;font-size:12px}
+.dotx{position:absolute;z-index:3;width:22px;height:22px;border-radius:50%;padding:0;font-size:15px;line-height:1;border:1.5px solid var(--dot);color:var(--dot);background:var(--card);transform:translate(-50%,-50%);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.dotx:hover,.dotx:focus-visible{background:var(--dot);color:var(--paper)}
 .rptWrap{margin-top:16px;display:flex;flex-direction:column;gap:6px}
 .rptLabel{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 #rptTitle{background:var(--card);border:1.5px solid var(--grid);border-radius:6px;padding:8px}
@@ -250,7 +252,7 @@ function renderPanel(){
     var row=document.createElement('div');row.className='row dotrow';
     var tx=document.createElement('span');tx.textContent='\u2506 '+(t.role||'Untitled');
     row.appendChild(tx);
-    row.appendChild(btn('Remove',function(){n.dotted=n.dotted.filter(function(i){return i!==tid});save();render()}));
+    row.appendChild(btn('Delete',function(){n.dotted=n.dotted.filter(function(i){return i!==tid});save();render()}));
     p.appendChild(row);
   });
 
@@ -286,6 +288,7 @@ function updateDraw(){
 function drawDots(){
   var svg=$('dots'),st=$('stage');if(!svg||!st)return;
   svg.textContent='';
+  st.querySelectorAll('.dotx').forEach(function(x){x.remove()});
   svg.setAttribute('width',st.offsetWidth);svg.setAttribute('height',st.offsetHeight);
   var sr=st.getBoundingClientRect(),NS='http://www.w3.org/2000/svg';
   function box(id){
@@ -311,6 +314,14 @@ function drawDots(){
     var c=document.createElementNS(NS,'circle');
     c.setAttribute('cx',x2);c.setAttribute('cy',y2);c.setAttribute('r','4.5');c.style.fill='var(--dot)';
     svg.appendChild(c);
+    var mx=0.125*x1+0.375*c1[0]+0.375*c2[0]+0.125*x2,my=0.125*y1+0.375*c1[1]+0.375*c2[1]+0.125*y2;
+    var tn=byId(tid),del=document.createElement('button');
+    del.type='button';del.className='dotx';del.textContent='\u00D7';
+    del.style.left=mx+'px';del.style.top=my+'px';
+    var lbl='Delete dotted line from '+(n.role||'box')+' to '+(tn?tn.role:'box');
+    del.title=lbl;del.setAttribute('aria-label',lbl);
+    del.addEventListener('click',function(ev){ev.stopPropagation();n.dotted=(n.dotted||[]).filter(function(i){return i!==tid});save();render()});
+    st.appendChild(del);
   })});
 }
 function countSub(id){var c=1;kids(id).forEach(function(k){c+=countSub(k.id)});return c}
